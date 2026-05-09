@@ -6,11 +6,12 @@ A simple 2D camera shader testing tool built in Unity. Users can drag in sprites
 
 ## Use
 For those who just want to use the tool:
-- Download and extract the zip below
+- [Download the zip from the release page](https://github.com/Mykol-Word/unity-shader-tester/releases)
+- Extract the zip
 - Run `ShaderTester.exe`
 - (Optional) Make a shortcut so you don't need to open the folder constantly
 
-[Download Shader Tester ZIP](https://github.com/Mykol-Word/unity-shader-tester/exe/shader-tester.zip)
+
 
 Otherwise, clone the repo and import the project into Unity.
 
