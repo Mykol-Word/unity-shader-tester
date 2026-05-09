@@ -1,0 +1,17 @@
+# Unity generated
+Library
+Temp
+Logs
+UserSettings
+
+# IDE
+.vsconfig
+.vscode
+*.csproj
+.vs/
+*.sln
+*.slnx
+
+#Agents
+AGENTS.md
+CLAUDE.md

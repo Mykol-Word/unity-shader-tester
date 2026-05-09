@@ -1,0 +1,61 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="ShaderTesterUi.uss" />
+    <ui:VisualElement name="root" class="root">
+        <ui:VisualElement name="left_panel" class="left-panel">
+            <ui:VisualElement name="lists" class="lists">
+                <ui:VisualElement name="shader_column" class="browser-column shader-column">
+                    <ui:Label text="Shaders" class="column-title" />
+                    <ui:ScrollView name="shader_list" class="item-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="sprite_column" class="browser-column sprite-column">
+                    <ui:Label text="Sprites" class="column-title" />
+                    <ui:ScrollView name="sprite_list" class="item-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="import_buttons" class="import-buttons">
+                <ui:Button name="import_shader_button" text="Import Shader" class="import-button import-shader-button" />
+                <ui:Button name="import_sprite_button" text="Import Sprite" class="import-button import-sprite-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="workspace" class="workspace" />
+        <ui:VisualElement name="properties_panel" class="properties-panel hidden">
+            <ui:Label text="Properties" class="properties-title" />
+            <ui:ScrollView name="properties_list" class="properties-list" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
+        </ui:VisualElement>
+        <ui:VisualElement name="context_menu" class="context-menu hidden">
+            <ui:Button name="delete_asset_button" text="Delete" class="context-menu-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="modal_layer" class="modal-layer hidden">
+            <ui:VisualElement name="import_sprite_modal" class="modal hidden">
+                <ui:Label text="Import Sprite" class="modal-title" />
+                <ui:VisualElement class="file-row">
+                    <ui:Button name="choose_sprite_file_button" text="Sprite File" class="file-button" />
+                    <ui:Label name="sprite_file_label" text="No file selected" class="file-label" />
+                </ui:VisualElement>
+                <ui:TextField name="sprite_name_field" label="Name" class="modal-field" />
+                <ui:Label name="sprite_import_error" class="error-label" />
+                <ui:VisualElement class="modal-actions">
+                    <ui:Button name="cancel_sprite_import_button" text="Cancel" class="modal-button" />
+                    <ui:Button name="confirm_sprite_import_button" text="Import" class="modal-button primary-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="import_shader_modal" class="modal hidden">
+                <ui:Label text="Import Shader" class="modal-title" />
+                <ui:VisualElement class="file-row">
+                    <ui:Button name="choose_shader_file_button" text="Shader File" class="file-button" />
+                    <ui:Label name="shader_file_label" text="No file selected" class="file-label" />
+                </ui:VisualElement>
+                <ui:VisualElement class="file-row">
+                    <ui:Button name="choose_shader_preview_button" text="Preview Sprite" class="file-button" />
+                    <ui:Label name="shader_preview_label" text="Optional" class="file-label" />
+                </ui:VisualElement>
+                <ui:TextField name="shader_name_field" label="Name" class="modal-field" />
+                <ui:Label name="shader_import_error" class="error-label" />
+                <ui:VisualElement class="modal-actions">
+                    <ui:Button name="cancel_shader_import_button" text="Cancel" class="modal-button" />
+                    <ui:Button name="confirm_shader_import_button" text="Import" class="modal-button primary-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
