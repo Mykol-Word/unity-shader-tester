@@ -1,21 +1,18 @@
 using System.Collections.Generic;
 using System.IO;
+using SFB;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 [RequireComponent(typeof(UIDocument))]
 [ExecuteAlways]
 public sealed class UiBrowser : MonoBehaviour
 {
-    private const string SpriteFolder = "Assets/Sprites";
-    private const string ShaderFolder = "Assets/Shaders";
-    private const string ShaderPreviewFolder = "Assets/Shaders/Preview";
-    private const string ShaderDefaultPreviewPath = "Assets/Shaders/Default/default.png";
+    private const string SpriteResourceFolder = "Sprites";
+    private const string ShaderResourceFolder = "Shaders";
+    private const string ShaderPreviewResourceFolder = "Shaders/Preview";
+    private const string ShaderDefaultPreviewResourcePath = "Shaders/Default/default";
 
     private static readonly List<UiBrowser> ActiveBrowsers = new List<UiBrowser>();
 
@@ -45,6 +42,8 @@ public sealed class UiBrowser : MonoBehaviour
     private string context_shader_preview_name;
     private bool context_is_shader;
     private bool callbacks_registered;
+    private readonly List<Texture2D> runtime_textures = new List<Texture2D>();
+    private readonly List<Sprite> runtime_sprites = new List<Sprite>();
 
     // caches component references
     private void Reset()
@@ -176,6 +175,7 @@ public sealed class UiBrowser : MonoBehaviour
         shader_list.Clear();
         sprite_list.Clear();
         shader_items.Clear();
+        ClearRuntimeSprites();
         HideContextMenu();
 
         AddSprites();
@@ -255,56 +255,101 @@ public sealed class UiBrowser : MonoBehaviour
     // adds sprite assets from the sprite folder
     private void AddSprites()
     {
-#if UNITY_EDITOR
-        string[] guids = AssetDatabase.FindAssets("t:Sprite", new[] { SpriteFolder });
+        string[] built_in_sprite_files = GetProjectResourceFiles(SpriteResourceFolder, true, ".png", ".jpg", ".jpeg");
 
-        for (int i = 0; i < guids.Length; i++)
+        if (built_in_sprite_files.Length > 0)
         {
-            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
-            Object[] sprites = AssetDatabase.LoadAllAssetRepresentationsAtPath(path);
+            for (int i = 0; i < built_in_sprite_files.Length; i++)
+            {
+                string item_name = Path.GetFileNameWithoutExtension(built_in_sprite_files[i]);
+                Sprite sprite = Resources.Load<Sprite>($"{SpriteResourceFolder}/{item_name}");
+
+                if (sprite == null)
+                {
+                    continue;
+                }
+
+                sprite_list.Add(CreateSpriteItem(item_name, sprite, true, built_in_sprite_files[i]));
+            }
+        }
+        else
+        {
+            Sprite[] sprites = Resources.LoadAll<Sprite>(SpriteResourceFolder);
+
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                sprite_list.Add(CreateSpriteItem(sprites[i].name, sprites[i], true, string.Empty));
+            }
+        }
+
+        string[] sprite_files = GetImageFiles(GetPersistentSpriteFolder());
+
+        for (int i = 0; i < sprite_files.Length; i++)
+        {
+            Sprite sprite = LoadRuntimeSprite(sprite_files[i]);
 
             if (sprite == null)
             {
-                for (int j = 0; j < sprites.Length; j++)
-                {
-                    Sprite nested_sprite = sprites[j] as Sprite;
-
-                    if (nested_sprite == null)
-                    {
-                        continue;
-                    }
-
-                    sprite_list.Add(CreateSpriteItem(nested_sprite.name, nested_sprite, true, path));
-                }
-
                 continue;
             }
 
-            sprite_list.Add(CreateSpriteItem(sprite.name, sprite, true, path));
+            sprite_list.Add(CreateSpriteItem(Path.GetFileNameWithoutExtension(sprite_files[i]), sprite, true, sprite_files[i]));
         }
-#endif
     }
 
     // adds shader assets from the shader folder
     private void AddShaders()
     {
-#if UNITY_EDITOR
-        string[] guids = AssetDatabase.FindAssets("t:Shader", new[] { ShaderFolder });
+        HashSet<string> shader_names = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        string[] built_in_shader_files = GetProjectResourceFiles(ShaderResourceFolder, true, ".shader");
 
-        for (int i = 0; i < guids.Length; i++)
+        if (built_in_shader_files.Length > 0)
         {
-            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+            for (int i = 0; i < built_in_shader_files.Length; i++)
+            {
+                string item_name = Path.GetFileNameWithoutExtension(built_in_shader_files[i]);
+                Shader shader = Resources.Load<Shader>($"{ShaderResourceFolder}/{item_name}");
 
-            if (shader == null)
+                if (shader == null)
+                {
+                    continue;
+                }
+
+                shader_names.Add(item_name);
+                shader_list.Add(CreateShaderItem(item_name, shader, GetShaderPreview(item_name), built_in_shader_files[i]));
+            }
+        }
+        else
+        {
+            Shader[] shaders = Resources.LoadAll<Shader>(ShaderResourceFolder);
+
+            for (int i = 0; i < shaders.Length; i++)
+            {
+                string item_name = GetRuntimeShaderName(shaders[i]);
+
+                if (!IsKnownBuiltInShaderName(item_name))
+                {
+                    continue;
+                }
+
+                shader_names.Add(item_name);
+                shader_list.Add(CreateShaderItem(item_name, shaders[i], GetShaderPreview(item_name), string.Empty));
+            }
+        }
+
+        string[] shader_files = GetShaderFiles(GetPersistentShaderFolder());
+
+        for (int i = 0; i < shader_files.Length; i++)
+        {
+            string item_name = Path.GetFileNameWithoutExtension(shader_files[i]);
+
+            if (shader_names.Contains(item_name))
             {
                 continue;
             }
 
-            shader_list.Add(CreateShaderItem(Path.GetFileNameWithoutExtension(path), shader, GetShaderPreview(Path.GetFileNameWithoutExtension(path)), path));
+            shader_list.Add(CreateShaderItem(item_name, null, GetShaderPreview(item_name), shader_files[i]));
         }
-#endif
     }
 
     // creates one sprite list entry
@@ -323,7 +368,7 @@ public sealed class UiBrowser : MonoBehaviour
         {
             item.RegisterCallback<PointerDownEvent>(evt =>
             {
-                if (evt.button == 1)
+                if (evt.button == 1 && !string.IsNullOrWhiteSpace(asset_path))
                 {
                     ShowContextMenu(evt.position, asset_path, false, string.Empty);
                     evt.StopPropagation();
@@ -343,7 +388,7 @@ public sealed class UiBrowser : MonoBehaviour
         {
             item.RegisterCallback<PointerDownEvent>(evt =>
             {
-                if (evt.button != 1)
+                if (evt.button != 1 || string.IsNullOrWhiteSpace(asset_path))
                 {
                     return;
                 }
@@ -361,7 +406,12 @@ public sealed class UiBrowser : MonoBehaviour
     private VisualElement CreateShaderItem(string item_name, Shader shader, Sprite preview_sprite, string asset_path)
     {
         VisualElement item = CreateSpriteItem(item_name, preview_sprite, false, asset_path);
-        shader_items[shader] = item;
+
+        if (shader != null)
+        {
+            shader_items[shader] = item;
+        }
+
         item.RegisterCallback<ClickEvent>(evt =>
         {
             if (shader == null || !Application.isPlaying)
@@ -428,8 +478,7 @@ public sealed class UiBrowser : MonoBehaviour
     // selects a source sprite file
     private void ChooseSpriteFile()
     {
-#if UNITY_EDITOR
-        string path = EditorUtility.OpenFilePanelWithFilters("Import Sprite", string.Empty, new[] { "Image Files", "png,jpg,jpeg,psd,tga", "All Files", "*" });
+        string path = ChooseFile("Import Sprite", new ExtensionFilter("Image Files", "png", "jpg", "jpeg"));
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -440,14 +489,12 @@ public sealed class UiBrowser : MonoBehaviour
         sprite_file_label.text = Path.GetFileName(path);
         sprite_name_field.value = Path.GetFileNameWithoutExtension(path);
         sprite_import_error.text = string.Empty;
-#endif
     }
 
     // selects a source shader file
     private void ChooseShaderFile()
     {
-#if UNITY_EDITOR
-        string path = EditorUtility.OpenFilePanelWithFilters("Import Shader", string.Empty, new[] { "Shader Files", "shader", "All Files", "*" });
+        string path = ChooseFile("Import Shader", new ExtensionFilter("Shader Files", "shader"));
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -458,14 +505,12 @@ public sealed class UiBrowser : MonoBehaviour
         shader_file_label.text = Path.GetFileName(path);
         shader_name_field.value = Path.GetFileNameWithoutExtension(path);
         shader_import_error.text = string.Empty;
-#endif
     }
 
     // selects an optional shader preview sprite file
     private void ChooseShaderPreviewFile()
     {
-#if UNITY_EDITOR
-        string path = EditorUtility.OpenFilePanelWithFilters("Import Shader Preview", string.Empty, new[] { "Image Files", "png,jpg,jpeg,psd,tga", "All Files", "*" });
+        string path = ChooseFile("Import Shader Preview", new ExtensionFilter("Image Files", "png", "jpg", "jpeg"));
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -475,13 +520,11 @@ public sealed class UiBrowser : MonoBehaviour
         selected_shader_preview_path = path;
         shader_preview_label.text = Path.GetFileName(path);
         shader_import_error.text = string.Empty;
-#endif
     }
 
     // imports a sprite into the sprites folder
     private void ImportSprite()
     {
-#if UNITY_EDITOR
         string asset_name = SanitizeAssetName(sprite_name_field.value);
 
         if (string.IsNullOrWhiteSpace(selected_sprite_path) || string.IsNullOrWhiteSpace(asset_name))
@@ -490,28 +533,28 @@ public sealed class UiBrowser : MonoBehaviour
             return;
         }
 
-        string target_path = $"{SpriteFolder}/{asset_name}{Path.GetExtension(selected_sprite_path).ToLowerInvariant()}";
+        if (!CanLoadImage(selected_sprite_path))
+        {
+            sprite_import_error.text = "Choose a PNG or JPG sprite file.";
+            return;
+        }
 
-        if (AssetExists(target_path) || NameExists(SpriteFolder, asset_name))
+        if (SpriteNameExists(asset_name))
         {
             sprite_import_error.text = "An asset with that name already exists.";
             return;
         }
 
-        Directory.CreateDirectory(SpriteFolder);
+        Directory.CreateDirectory(GetPersistentSpriteFolder());
+        string target_path = Path.Combine(GetPersistentSpriteFolder(), asset_name + Path.GetExtension(selected_sprite_path).ToLowerInvariant());
         File.Copy(selected_sprite_path, target_path);
-        AssetDatabase.ImportAsset(target_path);
-        SetTextureAsSprite(target_path);
-        AssetDatabase.Refresh();
         Refresh();
         CloseModals();
-#endif
     }
 
     // imports a shader and optional preview sprite
     private void ImportShader()
     {
-#if UNITY_EDITOR
         string asset_name = SanitizeAssetName(shader_name_field.value);
 
         if (string.IsNullOrWhiteSpace(selected_shader_path) || string.IsNullOrWhiteSpace(asset_name))
@@ -520,9 +563,13 @@ public sealed class UiBrowser : MonoBehaviour
             return;
         }
 
-        string shader_target_path = $"{ShaderFolder}/{asset_name}.shader";
+        if (Path.GetExtension(selected_shader_path).ToLowerInvariant() != ".shader")
+        {
+            shader_import_error.text = "Choose a shader file.";
+            return;
+        }
 
-        if (AssetExists(shader_target_path) || NameExists(ShaderFolder, asset_name))
+        if (ShaderNameExists(asset_name))
         {
             shader_import_error.text = "An asset with that name already exists.";
             return;
@@ -532,131 +579,62 @@ public sealed class UiBrowser : MonoBehaviour
 
         if (!string.IsNullOrWhiteSpace(selected_shader_preview_path))
         {
-            preview_target_path = $"{ShaderPreviewFolder}/{asset_name}{Path.GetExtension(selected_shader_preview_path).ToLowerInvariant()}";
+            if (!CanLoadImage(selected_shader_preview_path))
+            {
+                shader_import_error.text = "Choose a PNG or JPG preview file.";
+                return;
+            }
 
-            if (AssetExists(preview_target_path) || NameExists(ShaderPreviewFolder, asset_name))
+            if (ShaderPreviewNameExists(asset_name))
             {
                 shader_import_error.text = "A preview with that name already exists.";
                 return;
             }
+
+            preview_target_path = Path.Combine(GetPersistentShaderPreviewFolder(), asset_name + Path.GetExtension(selected_shader_preview_path).ToLowerInvariant());
         }
 
-        Directory.CreateDirectory(ShaderFolder);
-        Directory.CreateDirectory(ShaderPreviewFolder);
+        Directory.CreateDirectory(GetPersistentShaderFolder());
+        Directory.CreateDirectory(GetPersistentShaderPreviewFolder());
+        string shader_target_path = Path.Combine(GetPersistentShaderFolder(), asset_name + ".shader");
         File.Copy(selected_shader_path, shader_target_path);
 
         if (!string.IsNullOrWhiteSpace(preview_target_path))
         {
             File.Copy(selected_shader_preview_path, preview_target_path);
-            AssetDatabase.ImportAsset(preview_target_path);
-            SetTextureAsSprite(preview_target_path);
         }
 
-        AssetDatabase.ImportAsset(shader_target_path);
-        AssetDatabase.Refresh();
         Refresh();
         CloseModals();
-#endif
     }
 
-#if UNITY_EDITOR
     // returns the preview sprite for a shader entry
     private Sprite GetShaderPreview(string asset_name)
     {
-        string[] guids = AssetDatabase.FindAssets($"{asset_name} t:Sprite", new[] { ShaderPreviewFolder });
+        Sprite preview_sprite = LoadRuntimeSprite(GetPersistentShaderPreviewPath(asset_name));
 
-        for (int i = 0; i < guids.Length; i++)
+        if (preview_sprite != null)
         {
-            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-
-            if (Path.GetFileNameWithoutExtension(path) != asset_name)
-            {
-                continue;
-            }
-
-            Sprite sprite = LoadSpriteAtPath(path);
-
-            if (sprite != null)
-            {
-                return sprite;
-            }
+            return preview_sprite;
         }
 
-        return LoadSpriteAtPath(ShaderDefaultPreviewPath);
+        preview_sprite = Resources.Load<Sprite>($"{ShaderPreviewResourceFolder}/{asset_name}");
+        return preview_sprite != null ? preview_sprite : Resources.Load<Sprite>(ShaderDefaultPreviewResourcePath);
     }
 
-    // loads a sprite from a texture asset path
-    private Sprite LoadSpriteAtPath(string path)
+    // returns a readable shader name
+    private string GetRuntimeShaderName(Shader shader)
     {
-        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        string shader_name = shader.name;
+        int slash_index = shader_name.LastIndexOf('/');
 
-        if (sprite != null)
+        if (slash_index >= 0 && slash_index < shader_name.Length - 1)
         {
-            return sprite;
+            shader_name = shader_name.Substring(slash_index + 1);
         }
 
-        Object[] sprites = AssetDatabase.LoadAllAssetRepresentationsAtPath(path);
-
-        for (int i = 0; i < sprites.Length; i++)
-        {
-            sprite = sprites[i] as Sprite;
-
-            if (sprite != null)
-            {
-                return sprite;
-            }
-        }
-
-        return null;
+        return shader_name.StartsWith("Post ") ? shader_name.Substring(5) : shader_name;
     }
-
-    // configures imported image files as sprite assets
-    private void SetTextureAsSprite(string path)
-    {
-        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
-
-        if (importer == null)
-        {
-            return;
-        }
-
-        importer.textureType = TextureImporterType.Sprite;
-        importer.spriteImportMode = SpriteImportMode.Single;
-        importer.SaveAndReimport();
-    }
-
-    // returns true if an exact asset path already exists
-    private bool AssetExists(string path)
-    {
-        return File.Exists(path);
-    }
-
-    // returns true if an asset with the same file name exists directly in a folder
-    private bool NameExists(string folder, string asset_name)
-    {
-        if (!Directory.Exists(folder))
-        {
-            return false;
-        }
-
-        string[] files = Directory.GetFiles(folder);
-
-        for (int i = 0; i < files.Length; i++)
-        {
-            if (Path.GetExtension(files[i]) == ".meta")
-            {
-                continue;
-            }
-
-            if (Path.GetFileNameWithoutExtension(files[i]) == asset_name)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-#endif
 
     // removes path characters from imported asset names
     private string SanitizeAssetName(string asset_name)
@@ -670,6 +648,296 @@ public sealed class UiBrowser : MonoBehaviour
         }
 
         return clean_name;
+    }
+
+    // opens a native file picker and returns the selected file
+    private string ChooseFile(string title, ExtensionFilter filter)
+    {
+        string[] paths = StandaloneFileBrowser.OpenFilePanel(title, string.Empty, new[] { filter, new ExtensionFilter("All Files", "*") }, false);
+
+        if (paths == null || paths.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return paths[0];
+    }
+
+    // returns true when an image extension can be loaded at runtime
+    private bool CanLoadImage(string path)
+    {
+        string extension = Path.GetExtension(path).ToLowerInvariant();
+        return extension == ".png" || extension == ".jpg" || extension == ".jpeg";
+    }
+
+    // loads a runtime image file as a sprite
+    private Sprite LoadRuntimeSprite(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !CanLoadImage(path))
+        {
+            return null;
+        }
+
+        byte[] bytes = File.ReadAllBytes(path);
+        Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+
+        if (!texture.LoadImage(bytes))
+        {
+            DestroyRuntimeObject(texture);
+            return null;
+        }
+
+        texture.name = Path.GetFileNameWithoutExtension(path);
+        Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+        sprite.name = texture.name;
+        runtime_textures.Add(texture);
+        runtime_sprites.Add(sprite);
+        return sprite;
+    }
+
+    // destroys runtime sprites created for imported previews
+    private void ClearRuntimeSprites()
+    {
+        for (int i = 0; i < runtime_sprites.Count; i++)
+        {
+            DestroyRuntimeObject(runtime_sprites[i]);
+        }
+
+        for (int i = 0; i < runtime_textures.Count; i++)
+        {
+            DestroyRuntimeObject(runtime_textures[i]);
+        }
+
+        runtime_sprites.Clear();
+        runtime_textures.Clear();
+    }
+
+    // destroys generated unity objects from play mode or edit mode
+    private void DestroyRuntimeObject(Object value)
+    {
+        if (value == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(value);
+        }
+        else
+        {
+            DestroyImmediate(value);
+        }
+    }
+
+    // returns image files from a directory
+    private string[] GetImageFiles(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return new string[0];
+        }
+
+        List<string> files = new List<string>();
+        string[] all_files = Directory.GetFiles(folder);
+
+        for (int i = 0; i < all_files.Length; i++)
+        {
+            if (CanLoadImage(all_files[i]))
+            {
+                files.Add(all_files[i]);
+            }
+        }
+
+        files.Sort();
+        return files.ToArray();
+    }
+
+    // returns imported shader source files from a directory
+    private string[] GetShaderFiles(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return new string[0];
+        }
+
+        string[] files = Directory.GetFiles(folder, "*.shader");
+        System.Array.Sort(files);
+        return files;
+    }
+
+    // returns top-level files from an Assets/Resources subfolder when project files are available
+    private string[] GetProjectResourceFiles(string resource_folder, bool top_level_only, params string[] extensions)
+    {
+        string folder = Path.Combine(Application.dataPath, "Resources", resource_folder.Replace("/", Path.DirectorySeparatorChar.ToString()));
+
+        if (!Directory.Exists(folder))
+        {
+            return new string[0];
+        }
+
+        SearchOption search_option = top_level_only ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
+        string[] all_files = Directory.GetFiles(folder, "*.*", search_option);
+        List<string> files = new List<string>();
+
+        for (int i = 0; i < all_files.Length; i++)
+        {
+            string extension = Path.GetExtension(all_files[i]).ToLowerInvariant();
+
+            for (int j = 0; j < extensions.Length; j++)
+            {
+                if (extension != extensions[j])
+                {
+                    continue;
+                }
+
+                files.Add(all_files[i]);
+                break;
+            }
+        }
+
+        files.Sort();
+        return files.ToArray();
+    }
+
+    // filters Unity/helper shaders that can appear from recursive Resources shader loading
+    private bool IsKnownBuiltInShaderName(string item_name)
+    {
+        return !item_name.ToLowerInvariant().Contains("checkerboard")
+            && !item_name.ToLowerInvariant().Contains("fallback")
+            && !item_name.ToLowerInvariant().Contains("editor");
+    }
+
+    // returns the matching imported preview path, if one exists
+    private string GetPersistentShaderPreviewPath(string asset_name)
+    {
+        string[] files = GetImageFiles(GetPersistentShaderPreviewFolder());
+
+        for (int i = 0; i < files.Length; i++)
+        {
+            if (string.Equals(Path.GetFileNameWithoutExtension(files[i]), asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return files[i];
+            }
+        }
+
+        return string.Empty;
+    }
+
+    // returns true if an imported or built-in sprite name already exists
+    private bool SpriteNameExists(string asset_name)
+    {
+        if (NameExists(GetPersistentSpriteFolder(), asset_name))
+        {
+            return true;
+        }
+
+        Sprite[] sprites = Resources.LoadAll<Sprite>(SpriteResourceFolder);
+
+        for (int i = 0; i < sprites.Length; i++)
+        {
+            if (string.Equals(sprites[i].name, asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // returns true if an imported or built-in shader name already exists
+    private bool ShaderNameExists(string asset_name)
+    {
+        if (NameExists(GetPersistentShaderFolder(), asset_name))
+        {
+            return true;
+        }
+
+        string[] shader_files = GetProjectResourceFiles(ShaderResourceFolder, true, ".shader");
+
+        for (int i = 0; i < shader_files.Length; i++)
+        {
+            if (string.Equals(Path.GetFileNameWithoutExtension(shader_files[i]), asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        Shader[] shaders = shader_files.Length == 0 ? Resources.LoadAll<Shader>(ShaderResourceFolder) : new Shader[0];
+
+        for (int i = 0; i < shaders.Length; i++)
+        {
+            string shader_name = GetRuntimeShaderName(shaders[i]);
+
+            if (!IsKnownBuiltInShaderName(shader_name))
+            {
+                continue;
+            }
+
+            if (string.Equals(shader_name, asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // returns true if an imported or built-in shader preview name already exists
+    private bool ShaderPreviewNameExists(string asset_name)
+    {
+        if (NameExists(GetPersistentShaderPreviewFolder(), asset_name))
+        {
+            return true;
+        }
+
+        Sprite[] previews = Resources.LoadAll<Sprite>(ShaderPreviewResourceFolder);
+
+        for (int i = 0; i < previews.Length; i++)
+        {
+            if (string.Equals(previews[i].name, asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // returns true if a same-name file exists in a runtime folder
+    private bool NameExists(string folder, string asset_name)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return false;
+        }
+
+        string[] files = Directory.GetFiles(folder);
+
+        for (int i = 0; i < files.Length; i++)
+        {
+            if (string.Equals(Path.GetFileNameWithoutExtension(files[i]), asset_name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private string GetPersistentSpriteFolder()
+    {
+        return Path.Combine(Application.persistentDataPath, "Sprites");
+    }
+
+    private string GetPersistentShaderFolder()
+    {
+        return Path.Combine(Application.persistentDataPath, "Shaders");
+    }
+
+    private string GetPersistentShaderPreviewFolder()
+    {
+        return Path.Combine(GetPersistentShaderFolder(), "Preview");
     }
 
     // returns true if a panel position overlaps visible browser ui
@@ -955,7 +1223,6 @@ public sealed class UiBrowser : MonoBehaviour
     // deletes the asset selected by the context menu
     private void DeleteContextAsset()
     {
-#if UNITY_EDITOR
         if (string.IsNullOrWhiteSpace(context_asset_path))
         {
             return;
@@ -965,43 +1232,60 @@ public sealed class UiBrowser : MonoBehaviour
         {
             DeleteShaderAsset(context_asset_path, context_shader_preview_name);
         }
-        else
+        else if (File.Exists(context_asset_path))
         {
-            AssetDatabase.DeleteAsset(context_asset_path);
+            DeleteFileAndMeta(context_asset_path);
         }
 
         context_asset_path = string.Empty;
         context_shader_preview_name = string.Empty;
         HideContextMenu();
-        AssetDatabase.Refresh();
         Refresh();
-#endif
     }
 
-#if UNITY_EDITOR
-    // deletes a shader and its matching preview assets
+    // deletes an imported shader and its matching imported preview asset
     private void DeleteShaderAsset(string shader_path, string shader_preview_name)
     {
-        Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(shader_path);
-        ShaderController.ClearActiveShader(shader);
-        AssetDatabase.DeleteAsset(shader_path);
+        Shader active_shader = ShaderController.GetActiveShader();
 
-        string[] guids = AssetDatabase.FindAssets(shader_preview_name, new[] { ShaderPreviewFolder });
-
-        for (int i = 0; i < guids.Length; i++)
+        if (active_shader != null && string.Equals(GetRuntimeShaderName(active_shader), shader_preview_name, System.StringComparison.OrdinalIgnoreCase))
         {
-            string preview_path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            string preview_folder = Path.GetDirectoryName(preview_path)?.Replace("\\", "/");
+            ShaderController.ClearActiveShader(active_shader);
+        }
 
-            if (preview_folder != ShaderPreviewFolder || Path.GetFileNameWithoutExtension(preview_path) != shader_preview_name)
+        if (File.Exists(shader_path))
+        {
+            DeleteFileAndMeta(shader_path);
+        }
+
+        string[] preview_files = GetImageFiles(GetPersistentShaderPreviewFolder());
+
+        for (int i = 0; i < preview_files.Length; i++)
+        {
+            if (!string.Equals(Path.GetFileNameWithoutExtension(preview_files[i]), shader_preview_name, System.StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            AssetDatabase.DeleteAsset(preview_path);
+            DeleteFileAndMeta(preview_files[i]);
         }
     }
-#endif
+
+    // deletes a file and its Unity meta file if present
+    private void DeleteFileAndMeta(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
+        string meta_path = path + ".meta";
+
+        if (File.Exists(meta_path))
+        {
+            File.Delete(meta_path);
+        }
+    }
 
     // creates the common item container and label
     private VisualElement CreateBaseItem(string item_name)
@@ -1016,57 +1300,3 @@ public sealed class UiBrowser : MonoBehaviour
         return item;
     }
 }
-
-#if UNITY_EDITOR
-public sealed class UiAssetPostprocessor : AssetPostprocessor
-{
-    // configures dropped image assets for browser preview use
-    private void OnPreprocessTexture()
-    {
-        if (!assetPath.StartsWith(SpriteFolder) && !assetPath.StartsWith(ShaderPreviewFolder) && !assetPath.StartsWith(ShaderDefaultFolder))
-        {
-            return;
-        }
-
-        TextureImporter importer = assetImporter as TextureImporter;
-
-        if (importer == null)
-        {
-            return;
-        }
-
-        importer.textureType = TextureImporterType.Sprite;
-        importer.spriteImportMode = SpriteImportMode.Single;
-    }
-
-    // refreshes open ui lists when project assets change
-    private static void OnPostprocessAllAssets(string[] imported_assets, string[] deleted_assets, string[] moved_assets, string[] moved_from_asset_paths)
-    {
-        if (!TouchesBrowserFolder(imported_assets) && !TouchesBrowserFolder(deleted_assets) && !TouchesBrowserFolder(moved_assets) && !TouchesBrowserFolder(moved_from_asset_paths))
-        {
-            return;
-        }
-
-        EditorApplication.delayCall += UiBrowser.RefreshActiveBrowsers;
-    }
-
-    // returns true if an asset path belongs to the sprite or shader folders
-    private static bool TouchesBrowserFolder(string[] paths)
-    {
-        for (int i = 0; i < paths.Length; i++)
-        {
-            if (paths[i].StartsWith(SpriteFolder) || paths[i].StartsWith(ShaderFolder))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private const string SpriteFolder = "Assets/Sprites";
-    private const string ShaderFolder = "Assets/Shaders";
-    private const string ShaderPreviewFolder = "Assets/Shaders/Preview";
-    private const string ShaderDefaultFolder = "Assets/Shaders/Default";
-}
-#endif

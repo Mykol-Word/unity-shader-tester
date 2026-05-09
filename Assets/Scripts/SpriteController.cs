@@ -268,8 +268,12 @@ public sealed class SpriteController : MonoBehaviour
         float start_size = Mathf.Max(Mathf.Max(Mathf.Abs(start_delta.x), Mathf.Abs(start_delta.y)), 0.001f);
         float current_size = Mathf.Max(Mathf.Max(Mathf.Abs(current_delta.x), Mathf.Abs(current_delta.y)), 0.001f);
         float scale = Mathf.Max(current_size / start_size, MinimumScale);
-        selected_renderer.transform.localScale = resize_start_scale * scale;
-        selected_renderer.transform.position += resize_anchor - selected_renderer.bounds.min;
+        Vector3 resize_scale = resize_start_scale * scale;
+        resize_scale.z = 0;
+        selected_renderer.transform.localScale = resize_scale;
+        Vector3 position = resize_anchor - selected_renderer.bounds.min;
+        position.z = 0;
+        selected_renderer.transform.position += position;
     }
 
     // finds the topmost spawned sprite under a world position

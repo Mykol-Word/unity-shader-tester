@@ -25,6 +25,7 @@
         <ui:VisualElement name="context_menu" class="context-menu hidden">
             <ui:Button name="delete_asset_button" text="Delete" class="context-menu-button" />
         </ui:VisualElement>
+        <ui:Button name="options_button" text="Options" class="options-button" />
         <ui:VisualElement name="modal_layer" class="modal-layer hidden">
             <ui:VisualElement name="import_sprite_modal" class="modal hidden">
                 <ui:Label text="Import Sprite" class="modal-title" />
@@ -54,6 +55,19 @@
                 <ui:VisualElement class="modal-actions">
                     <ui:Button name="cancel_shader_import_button" text="Cancel" class="modal-button" />
                     <ui:Button name="confirm_shader_import_button" text="Import" class="modal-button primary-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="options_modal" class="modal hidden">
+                <ui:Label text="Options" class="modal-title" />
+                <ui:Toggle name="fullscreen_toggle" text="Fullscreen" class="settings-toggle" />
+                <ui:VisualElement class="settings-row">
+                    <ui:Label text="Background Color" class="settings-label" />
+                    <ui:TextField name="background_color_field" class="settings-field" />
+                </ui:VisualElement>
+                <ui:Label text="#FFFFFF (Hex)" class="settings-hint" />
+                <ui:Label name="settings_error" class="error-label" />
+                <ui:VisualElement class="modal-actions">
+                    <ui:Button name="close_options_button" text="Close" class="modal-button primary-button" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

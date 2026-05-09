@@ -53,6 +53,21 @@
     border-left-width: 0;
 }
 
+.options-button {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 92px;
+    height: 32px;
+    color: rgb(237, 240, 244);
+    background-color: rgb(48, 57, 68);
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-color: rgb(83, 94, 109);
+}
+
 .properties-title {
     height: 3%;
     margin-bottom: 2%;
@@ -283,6 +298,39 @@
     -unity-text-align: middle-left;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.settings-toggle {
+    height: 28px;
+    margin-bottom: 10px;
+    color: rgb(219, 224, 230);
+}
+
+.settings-row {
+    flex-direction: row;
+    min-height: 32px;
+    margin-bottom: 4px;
+}
+
+.settings-label {
+    width: 132px;
+    color: rgb(213, 219, 226);
+    -unity-text-align: middle-left;
+}
+
+.settings-field {
+    flex-grow: 1;
+}
+
+.settings-field TextInput {
+    min-height: 24px;
+}
+
+.settings-hint {
+    margin-left: 132px;
+    margin-bottom: 8px;
+    color: rgb(128, 137, 148);
+    font-size: 10px;
 }
 
 .modal-field {
